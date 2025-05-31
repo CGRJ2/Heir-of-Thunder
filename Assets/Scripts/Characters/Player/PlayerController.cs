@@ -1,56 +1,159 @@
+using Cinemachine;
+using SmallScaleInteractive._2DCharacter;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-public class PlayerController : CJM.CharacterControllerBase
+public class PlayerController : CharacterControllerBase
 {
+    public bool isSprintInput;
+    public bool isJumpInput;
+    private InputAction sprintAction;
+    private InputAction jumpAction;
+
+
+    [HideInInspector] public StateMachine<PlayerStateTypes> stateMachine;
+    [HideInInspector] public CinemachineFramingTransposer cinemachineFrame;
+    [SerializeField] private CinemachineVirtualCamera virtualCam;
+    public float cineFrameOffsetX;
+    public float cineFrameOffsetY;
+
+
+
+
     [SerializeField] float moveSpeedLimit = 0.16f;
     [SerializeField] float moveAccelation = 10f;
     [SerializeField] float dragAccelation = 6f;
     [SerializeField] float customGravity;
 
-    private Rigidbody rb;
+    Rigidbody rb;
 
-    Vector2 inputDir = Vector2.zero;
-    [SerializeField] Vector2 finalVelocity;
-    [SerializeField] Vector2 currentVelocity;
-    [SerializeField] Vector2 sideMoveForce;
+    public Vector2 InputDir { get; private set; }
+    public Vector2 finalVelocity;
+    public Vector2 currentVelocity;
 
+    public readonly int IDLE_HASH = Animator.StringToHash("Idle");
+    public readonly int WALK_HASH = Animator.StringToHash("Walk");
+    public readonly int SPRINT_HASH = Animator.StringToHash("Sprint");
+    public readonly int DASH_HASH = Animator.StringToHash("Dash");
+    public readonly int JUMP_HASH = Animator.StringToHash("Jump");
+    public readonly int FALL_HASH = Animator.StringToHash("Fall");
 
-    //Vector2 moveDir;
-    //Vector2 aimDir;
+    // 상태패턴으로 콜라이더 상태들을 정리하자
+    // 바닥에 닿음
+    // 공중에 뜸
+    // 바닥+벽에 닿음
+    // 벽에만 닿음
+    // 45도 이상의 슬로프 바닥에 닿음(슬라이딩)
+    // 90도 넘은 벽에 닿음-> 점프 상태로 변경
+    // 바닥에 닿음 상태에서 바닥 모서리에 닿음 => 휘청이는 모션
+    // 공중에 뜸 + 벽에 닿음 + 모서리에 닿음 => 벽 모서리 잡기
+
+    private void StateMachineInit()
+    {
+        stateMachine = new StateMachine<PlayerStateTypes>();
+        stateMachine.stateDic.Add(PlayerStateTypes.Idle, new Player_Idle(this));
+        stateMachine.stateDic.Add(PlayerStateTypes.Walk, new Player_Walk(this));
+        stateMachine.stateDic.Add(PlayerStateTypes.Jump, new Player_Jump(this));
+        stateMachine.CurState = stateMachine.stateDic[PlayerStateTypes.Idle];
+    }
+
+    private void InputActionsInit()
+    {
+        // 플레이어 조작 맵
+        var playerControlMap = GetComponent<PlayerInput>().actions.FindActionMap("PlayerActions");
+        
+        // 달리기 액션
+        sprintAction = playerControlMap.FindAction("Sprint");
+        sprintAction.Enable();
+        sprintAction.performed += HandleSprint;
+        sprintAction.canceled += HandleSprint;
+
+        // 점프 액션
+        jumpAction = playerControlMap.FindAction("Jump");
+        jumpAction.Enable();
+        jumpAction.performed += HandleJump;
+        jumpAction.canceled += HandleJump;
+    }
 
     private void Start()
     {
         rb = GetComponent<Rigidbody>();
+        cinemachineFrame = virtualCam.GetCinemachineComponent<CinemachineFramingTransposer>();
+        StateMachineInit(); 
+        InputActionsInit();
     }
 
+    #region 트리거형 Input ... 이동, 공격, 스킬, 상호작용, 아이템 사용
     public void OnMove(InputValue value)
     {
-        inputDir = value.Get<Vector2>();
+        InputDir = value.Get<Vector2>();
     }
 
-    void SetDirections()
+    public void OnAttack(InputValue value)
     {
-        //aimDir = ((transform.right * inputMovement.x) + (transform.up * inputMovement.y)).normalized;
-        //moveDir = (transform.right * inputMovement.x).normalized;
-    }
 
-    void Move()
+    }
+    #endregion
+
+    #region 지속 상태 Input ... 달리기, 점프, 차징
+    public void HandleSprint(InputAction.CallbackContext context)
     {
-        //ClampInputVelocity(inputDir, )
-        //rb.MovePosition(transform.position + (Vector3)GetFinalVelocity());
-        transform.position += (Vector3)GetFinalVelocity();
+        if (context.performed)
+            isSprintInput = true;
+        else if (context.canceled)
+            isSprintInput = false;
     }
 
+    public void HandleJump(InputAction.CallbackContext context)
+    {
+        if (context.performed)
+            isJumpInput = true;
+        else if (context.canceled)
+            isJumpInput = false;
+    }
+    #endregion
+
+    private void OnDestroy()
+    {
+        sprintAction.performed -= HandleSprint;
+        sprintAction.canceled -= HandleSprint;
+        jumpAction.performed -= HandleJump;
+        jumpAction.canceled -= HandleJump;
+    }
+
+    public void SetSpriteDir()
+    {
+        if (InputDir.x < 0)
+        {
+            spriteRenderer.flipX = true;
+            cinemachineFrame.m_TrackedObjectOffset = new Vector3(-10, 2, 0);
+        }
+        else if (InputDir.x > 0)
+        {
+            spriteRenderer.flipX = false;
+            cinemachineFrame.m_TrackedObjectOffset = new Vector3(10, 2, 0);
+        }
+    }
+
+
+    private void Update()
+    {
+        stateMachine.Update();
+    }
     private void FixedUpdate()
     {
-        Move();
+        stateMachine.FixedUpdate();
+    }
+    public void Move()
+    {
+        transform.position += (Vector3)GetFinalVelocity();
     }
 
     public Vector2 GetFinalVelocity()
     {
+        Vector2 sideMoveForce;
         // 최대 속도에 도달 && 입력과 진행방향이 같을 때
-        if (Mathf.Abs(currentVelocity.x) >= moveSpeedLimit && Mathf.Sign(currentVelocity.x) == Mathf.Sign(inputDir.x))
+        if (Mathf.Abs(currentVelocity.x) >= moveSpeedLimit && Mathf.Sign(currentVelocity.x) == Mathf.Sign(InputDir.x))
         {
             // 횡 속도 limit 고정
             currentVelocity.x = moveSpeedLimit * Mathf.Sign(currentVelocity.x);
@@ -61,11 +164,11 @@ public class PlayerController : CJM.CharacterControllerBase
         // 그 외에 상황에서는 가속or감속
         else
         {
-            sideMoveForce = (Vector2)(transform.right * inputDir.x).normalized * moveAccelation / 10f;
+            sideMoveForce = (Vector2)(transform.right * InputDir.x).normalized * moveAccelation / 10f;
         }
 
         // 횡 이동 입력값이 없다면 => 서서히 감속
-        if (inputDir.x == 0)
+        if (InputDir.x == 0)
         {
             // 일정 속도 이상일 때 감속
             if (Mathf.Abs(currentVelocity.x) > 0.01f)
@@ -88,66 +191,9 @@ public class PlayerController : CJM.CharacterControllerBase
         return finalVelocity;
     }
 
-    // 최대 속도 제한
-    public Vector2 ClampInputVelocity(Vector2 inputDir, Vector2 velocity, float limit)
+    public void Jump()
     {
-        float dot = Vector2.Dot(inputDir.normalized, velocity);
-        if (dot > limit)
-        {
-            inputDir = Vector2.zero;
-        }
-        return inputDir;
+        transform.position += (Vector3)GetFinalVelocity();
     }
 
-    // 급정지 (반대방향 입력 시 속도 줄이기)
-    /*public Vector2 GetStoppingForce(Vector2 velocity, float stoppingForce)
-    {
-        Vector2 inputDir = GetDirectedInputMovement();
-        float dot = Vector2.Dot(inputDir, velocity);
-
-        if (dot > 0 || (!applyStoppingWhenBraking && inputDir.magnitude >= 0.05f))
-            return Vector2.zero;
-
-        Vector2 stopDir = -GetWalkDirection(velocity); // 현재 이동 반대 방향
-        Vector2 maxStopChange = stopDir * stoppingForce * dt;
-        Vector2 velInDir = | Dot(velocity, stopDir) | *stopDir;
-
-        return (velInDir > maxStopChange) ? maxStopChange : velInDir;
-    }*/
-
-    // 기본 마찰력, 입력이 없으면 자동 감속
-    /*public Vector2 GetFriction(Vector2 velocity, Vector2 currentForce, float frictionConstant)
-    {
-        if (IsGrounded())
-        {
-            Vector2 dir = -GetWalkDirection(velocity); // 현재 이동 반대 방향
-            Vector2 maxFrictionChange = dir * frictionConstant * Time.fixedDeltaTime;
-
-            Vector2 velInDir = | Dot(velocity, dir) | *dir;
-
-            return (velInDir.magnitude > maxFrictionChange.magnitude) ? maxFrictionChange : velInDir;
-        }
-
-        return Vector2.zero;
-    }
-
-    public Vector2 GetDirectedInputMovement()
-    {
-        Vector2 input =
-        Vector2 dir = GetWalkDirection(input);
-    }*/
-
-    /*public Vector2 GetGravity()
-    {
-        Vector2 fGravity = Vector2.down * customGravity;
-        if (m_ApplyGravityIntoGroundNormal)
-        {
-            fGravity = -m_ControlledCollider.GetGroundedInfo().GetNormal() * customGravity;
-        }
-        if (m_ControlledCollider.IsGrounded() && !m_ApplyGravityOnGround)
-        {
-            fGravity = Vector2.zero;
-        }
-        return fGravity;
-    }*/
 }
