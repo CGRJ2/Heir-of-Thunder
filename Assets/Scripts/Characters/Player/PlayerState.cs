@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class PlayerState : BaseState
@@ -10,9 +8,10 @@ public class PlayerState : BaseState
     public PlayerState(PlayerController pc)
     {
         playerController = pc;
+        colliderState = pc.GetComponent<ColliderState>();
     }
     public override void Enter() { }
-    public override void Update() 
+    public override void Update()
     {
         if (playerController.isJumpInput && colliderState.isGrounded)
             playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Jump]);
@@ -56,7 +55,7 @@ public class Player_Walk : PlayerState
     public override void Update()
     {
         base.Update();
-        
+
         // Idle 전이.
         if (Mathf.Abs(playerController.InputDir.x) < 0.1f) // 조건 추가 필요
         {
@@ -68,7 +67,8 @@ public class Player_Walk : PlayerState
     }
     public override void FixedUpdate()
     {
-        playerController.Move();
+        playerController.SimulateFinalVelocity();
+
     }
     public override void Exit() { }
 }
@@ -100,7 +100,7 @@ public class Player_Sprint : PlayerState
 
 public class Player_Jump : PlayerState
 {
-    public Player_Jump(PlayerController pc) : base(pc) 
+    public Player_Jump(PlayerController pc) : base(pc)
     {
 
     }
@@ -108,14 +108,18 @@ public class Player_Jump : PlayerState
     public override void Enter()
     {
         playerController.animator.Play(playerController.JUMP_HASH);
-        playerController.Jump();
+        playerController.SetJumpVelocity();
+        colliderState.isGrounded = false;
+        colliderState.isGroundCheckWait = true;
+
+
     }
 
-   /* public override void Update()
+    public override void Update()
     {
 
-        if (playerController.isGrounded)
-            playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[EState.Idle]);
+        if (playerController.finalVelocity.y <= 0)
+            playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Fall]);
 
         // 왼쪽 오른쪽 방향 전환.
         playerController.SetSpriteDir();
@@ -123,12 +127,20 @@ public class Player_Jump : PlayerState
 
     public override void FixedUpdate()
     {
-        playerController.rigid.velocity = new Vector2(playerController.inputX * playerController.moveSpeed, playerController.rigid.velocity.y);
-    }*/
+        // 중력 계속 적용
+        playerController.ApplyGravity();
+
+        playerController.ApplyJumpCut();
+
+
+        // 점프 테스트용. 삭제필요
+        playerController.SimulateFinalVelocity();
+
+    }
 }
 public class Player_Fall : PlayerState
 {
-    /*public Player_Fall(PlayerController pc) : base(pc)
+    public Player_Fall(PlayerController pc) : base(pc)
     {
 
     }
@@ -136,29 +148,43 @@ public class Player_Fall : PlayerState
     public override void Enter()
     {
         playerController.animator.Play(playerController.FALL_HASH);
-        playerController.rigid.AddForce(Vector2.up * playerController.jumpSpeed, ForceMode2D.Impulse);
-        playerController.isGrounded = false;
-        playerController.isJumped = false;
+        colliderState.isGroundCheckWait = false;
     }
 
     public override void Update()
     {
-
-        if (playerController.isGrounded)
-            playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[EState.Idle]);
-
         // 왼쪽 오른쪽 방향 전환.
         playerController.SetSpriteDir();
     }
 
     public override void FixedUpdate()
     {
-        playerController.rigid.velocity = new Vector2(playerController.inputX * playerController.moveSpeed, playerController.rigid.velocity.y);
-    }*/
+        if (!colliderState.isGrounded)
+        {
+            // 중력 계속 적용
+            playerController.ApplyGravity();
+
+            playerController.SimulateFinalVelocity();
+        }
+        else
+        {
+            // 점프 종료, 입력이 있으면 이동or달리기 상태로 전환, 없으면 Idle로 전환
+            playerController.finalVelocity.y = 0;
+
+            // 현재 Ground 오브젝트의 Y값으로 위치 설정
+            playerController.SetGroundPosY(colliderState.groundHitColids[0].transform.parent.position.y);
+
+            // 점프 계속 입력 시 다시 점프, 입력없을 시 Idle상태로 전환
+            if (playerController.isJumpInput)
+                playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Jump]);
+            else
+                playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Idle]);
+        }
+    }
 }
 
 
 public enum PlayerStateTypes
 {
-    Idle, Walk, Jump, Attack01, Attack02, Attack03
+    Idle, Walk, Jump, Fall, Attack01, Attack02, Attack03
 }

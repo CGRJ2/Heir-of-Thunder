@@ -1,5 +1,4 @@
 using Cinemachine;
-using SmallScaleInteractive._2DCharacter;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -23,13 +22,17 @@ public class PlayerController : CharacterControllerBase
     [SerializeField] float moveSpeedLimit = 0.16f;
     [SerializeField] float moveAccelation = 10f;
     [SerializeField] float dragAccelation = 6f;
-    [SerializeField] float customGravity;
+    [SerializeField] float customGravity = -10f;
+    [SerializeField] float jumpVelocity = 15f;
+    [SerializeField] float jumpCutVelocity = 5f;
+    [SerializeField] float fallingVelocityLimit = 5f;
+    public bool isJumpCut;
 
     Rigidbody rb;
 
     public Vector2 InputDir { get; private set; }
     public Vector2 finalVelocity;
-    public Vector2 currentVelocity;
+    //public Vector2 totalVerticalVelocity;
 
     public readonly int IDLE_HASH = Animator.StringToHash("Idle");
     public readonly int WALK_HASH = Animator.StringToHash("Walk");
@@ -54,6 +57,7 @@ public class PlayerController : CharacterControllerBase
         stateMachine.stateDic.Add(PlayerStateTypes.Idle, new Player_Idle(this));
         stateMachine.stateDic.Add(PlayerStateTypes.Walk, new Player_Walk(this));
         stateMachine.stateDic.Add(PlayerStateTypes.Jump, new Player_Jump(this));
+        stateMachine.stateDic.Add(PlayerStateTypes.Fall, new Player_Fall(this));
         stateMachine.CurState = stateMachine.stateDic[PlayerStateTypes.Idle];
     }
 
@@ -61,7 +65,7 @@ public class PlayerController : CharacterControllerBase
     {
         // 플레이어 조작 맵
         var playerControlMap = GetComponent<PlayerInput>().actions.FindActionMap("PlayerActions");
-        
+
         // 달리기 액션
         sprintAction = playerControlMap.FindAction("Sprint");
         sprintAction.Enable();
@@ -79,7 +83,7 @@ public class PlayerController : CharacterControllerBase
     {
         rb = GetComponent<Rigidbody>();
         cinemachineFrame = virtualCam.GetCinemachineComponent<CinemachineFramingTransposer>();
-        StateMachineInit(); 
+        StateMachineInit();
         InputActionsInit();
     }
 
@@ -107,10 +111,17 @@ public class PlayerController : CharacterControllerBase
     public void HandleJump(InputAction.CallbackContext context)
     {
         if (context.performed)
+        {
+            isJumpCut = false;
             isJumpInput = true;
-        else if (context.canceled)
+        }
+        if (context.canceled)
+        {
+            isJumpCut = true;
             isJumpInput = false;
+        }
     }
+
     #endregion
 
     private void OnDestroy()
@@ -144,56 +155,105 @@ public class PlayerController : CharacterControllerBase
     {
         stateMachine.FixedUpdate();
     }
-    public void Move()
+    public void SimulateFinalVelocity()
     {
-        transform.position += (Vector3)GetFinalVelocity();
+        transform.position += GetFinalVelocity();
+    }
+    public void SetGroundPosY(float y)
+    {
+        transform.position = new Vector2(transform.position.x, y);
     }
 
-    public Vector2 GetFinalVelocity()
+    public Vector3 GetFinalVelocity()
     {
-        Vector2 sideMoveForce;
-        // 최대 속도에 도달 && 입력과 진행방향이 같을 때
-        if (Mathf.Abs(currentVelocity.x) >= moveSpeedLimit && Mathf.Sign(currentVelocity.x) == Mathf.Sign(InputDir.x))
-        {
-            // 횡 속도 limit 고정
-            currentVelocity.x = moveSpeedLimit * Mathf.Sign(currentVelocity.x);
+        Vector2 currentVelocity = finalVelocity;
+        Vector2 newTotalVelocity = GetGroundSideVelocity() + GetGroundDrag();
 
-            // 가속력 0으로 설정
-            sideMoveForce = Vector2.zero;
-        }
-        // 그 외에 상황에서는 가속or감속
-        else
-        {
-            sideMoveForce = (Vector2)(transform.right * InputDir.x).normalized * moveAccelation / 10f;
-        }
-
-        // 횡 이동 입력값이 없다면 => 서서히 감속
-        if (InputDir.x == 0)
-        {
-            // 일정 속도 이상일 때 감속
-            if (Mathf.Abs(currentVelocity.x) > 0.01f)
-            {
-                sideMoveForce = -(Vector2)(transform.right * currentVelocity.x).normalized * dragAccelation / 10f;
-            }
-            // 일정 속도 이하라면 finalVelocity = zero로 반환해 정지
-            else
-            {
-                // 횡 이동만 zero가 되게 만들기.
-                finalVelocity = Vector2.zero;
-                currentVelocity = Vector2.zero;
-                return Vector2.zero;
-            }
-        }
-        
-        finalVelocity = currentVelocity + sideMoveForce * Time.fixedDeltaTime;
-        currentVelocity = finalVelocity;
+        finalVelocity = currentVelocity + newTotalVelocity * Time.fixedDeltaTime;
 
         return finalVelocity;
     }
 
-    public void Jump()
+    public Vector2 GetGroundSideVelocity()
     {
-        transform.position += (Vector3)GetFinalVelocity();
+        Vector2 currentVelocity = finalVelocity;
+        Vector2 sideMoveForce;
+
+        // 횡이동 입력값이 있을 때 => 횡이동 처리
+        if (InputDir.x != 0)
+        {
+            // 최대 속도에 도달 && 입력과 진행방향이 같을 때 
+            if (Mathf.Abs(currentVelocity.x) >= moveSpeedLimit && Mathf.Sign(currentVelocity.x) == Mathf.Sign(InputDir.x))
+            {
+                // 횡 속도 limit 고정
+                currentVelocity.x = moveSpeedLimit * Mathf.Sign(currentVelocity.x);
+
+                // 가속력 0으로 설정
+                sideMoveForce = Vector2.zero;
+            }
+            // 그 외에 상황에서는 가속or감속
+            else
+            {
+                sideMoveForce = (Vector2.right * InputDir.x).normalized * moveAccelation / 10f;
+            }
+
+            return sideMoveForce;
+        }
+        else return Vector2.zero;
     }
+
+    public Vector2 GetGroundDrag()
+    {
+        // 횡 이동 입력값이 없다면 => 서서히 감속
+        if (InputDir.x == 0)
+        {
+            Vector2 currentVelocity = finalVelocity;
+            Vector2 dragForce;
+
+            // 일정 속도 이상일 때 감속
+            if (Mathf.Abs(currentVelocity.x) > 0.01f)
+            {
+                dragForce = -(Vector2.right * currentVelocity.x).normalized * dragAccelation / 10f;
+                return dragForce;
+            }
+            // 일정 속도 이하라면 finalVelocity = zero로 반환해 정지
+            else
+            {
+                // 횡 이동 속도 0으로 설정 후 zero 반환
+                finalVelocity.x = 0;
+                return Vector2.zero;
+            }
+        }
+        else return Vector2.zero;
+    }
+
+    public void SetJumpVelocity()
+    {
+        finalVelocity.y = jumpVelocity * Time.fixedDeltaTime;
+    }
+
+    public void ApplyGravity()
+    {
+        if (finalVelocity.y > -fallingVelocityLimit)
+        {
+            finalVelocity.y -= customGravity * Time.fixedDeltaTime;
+        }
+        else
+        {
+            finalVelocity.y = -fallingVelocityLimit;
+        }
+    }
+
+    // 낮은 점프는 점프 컷으로 구현해야할듯?
+    public void ApplyJumpCut()
+    {
+        if (isJumpCut)
+        {
+            if (finalVelocity.y > -fallingVelocityLimit)
+                finalVelocity.y -= jumpCutVelocity * Time.fixedDeltaTime;
+        }
+    }
+
+
 
 }
