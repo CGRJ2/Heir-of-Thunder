@@ -5,6 +5,7 @@ public class PlayerState : BaseState
     protected PlayerController playerController;
     protected ColliderState colliderState;
     public bool isJumping;
+    public bool isCrouching;
 
     public PlayerState(PlayerController pc)
     {
@@ -14,7 +15,9 @@ public class PlayerState : BaseState
     public override void Enter() { }
     public override void Update()
     {
-        // 점프 가능 조건
+        // 모든 상태에서 조건에 의해 전환 가능한 상태들
+
+        //#점프 가능 조건
         if (playerController.isJumpInput)
         {
             // 일반 점프 가능 조건
@@ -25,7 +28,7 @@ public class PlayerState : BaseState
                 playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Jump]);
             }
             // 코요테 점프 가능 조건
-            else if (colliderState.coyoteTimeCounter > 0f && !isJumping && 
+            else if (colliderState.coyoteTimeCounter > 0f && !isJumping &&
                 playerController.stateMachine.CurState != playerController.stateMachine.stateDic[PlayerStateTypes.Jump])
             {
                 isJumping = true;
@@ -39,8 +42,26 @@ public class PlayerState : BaseState
             }*/
         }
 
+        //#방향키 아래(웅크리기, 앉아 걷기, 지면 슬라이딩) 조건들
+        // 떨어지는 상태에서 지면에 닿자마자 상태 변환하면 안되기에 예외처리
+        // Fall 상태의 FixedUpdate에서 플레이어의 발을 지면에 스냅하는 로직이 있기 때문.
+        if (Mathf.Sign(playerController.InputDir.y) == -1 && colliderState.isGrounded && playerController.stateMachine.CurState != playerController.stateMachine.stateDic[PlayerStateTypes.Fall])
+        {
+            if (playerController.finalHorizontalVelocity.magnitude > playerController.GetSlidingSpeedMin())
+            {
+                playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.GroundSlide]);
+            }
+            else if (playerController.finalHorizontalVelocity.magnitude < 0.1f)
+            {
+                playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.CrouchIdle]);
+            }
+            else
+            {
+                playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.CrouchMove]);
+            }
+        }
 
-        // 낙하 조건
+        //#낙하 조건
         if (!colliderState.isGrounded &&
             playerController.stateMachine.CurState != playerController.stateMachine.stateDic[PlayerStateTypes.Jump])
         {
@@ -66,10 +87,15 @@ public class Player_Idle : PlayerState
     public override void Update()
     {
         base.Update();
-        if (Mathf.Abs(playerController.InputDir.x) > 0.1f) 
+        if (Mathf.Abs(playerController.InputDir.x) > 0.1f)
         {
             playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Walk]);
         }
+
+        /*if (Mathf.Sign(playerController.InputDir.y) == -1)
+        {
+            playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.CrouchIdle]);
+        }*/
     }
 
     public override void FixedUpdate()
@@ -110,7 +136,6 @@ public class Player_Walk : PlayerState
     }
     public override void FixedUpdate()
     {
-        Debug.Log(playerController.finalHorizontalVelocity);
         playerController.SimulateFinalVelocity();
     }
     public override void Exit() { }
@@ -224,6 +249,11 @@ public class Player_Fall : PlayerState
 
             if (playerController.isJumpInput)
                 playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Jump]);
+            else if (Mathf.Abs(playerController.InputDir.x) > 0.1f)
+            {
+                playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Walk]);
+                isJumping = false;
+            }
             else
             {
                 playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Idle]);
@@ -265,8 +295,119 @@ public class Player_Fall : PlayerState
     }
 }
 
+public class Player_CrouchIdle : PlayerState
+{
+    public Player_CrouchIdle(PlayerController pc) : base(pc)
+    {
 
+    }
+
+    public override void Enter()
+    {
+        playerController.animator.Play(playerController.CrouchIdle_HASH);
+    }
+
+
+    public override void Update()
+    {
+        base.Update();
+
+        if (Mathf.Sign(playerController.InputDir.y) != -1)
+        {
+            playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Idle]);
+        }
+
+        else if (Mathf.Abs(playerController.InputDir.x) > 0.1f)
+        {
+            playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.CrouchMove]);
+        }
+    }
+
+    public override void FixedUpdate()
+    {
+        playerController.SimulateFinalVelocity();
+    }
+}
+
+public class Player_CrouchMove : PlayerState
+{
+    public Player_CrouchMove(PlayerController pc) : base(pc)
+    {
+
+    }
+
+    public override void Enter()
+    {
+        playerController.animator.Play(playerController.CrouchMove_HASH);
+    }
+
+    public override void Update()
+    {
+        base.Update();
+
+        if (Mathf.Sign(playerController.InputDir.y) != -1 && Mathf.Abs(playerController.InputDir.x) < 0.1f)
+        {
+            playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Idle]);
+        }
+
+        else if (Mathf.Sign(playerController.InputDir.y) == -1 && Mathf.Abs(playerController.InputDir.x) < 0.1f)
+        {
+            playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.CrouchIdle]);
+        }
+
+        else if (Mathf.Sign(playerController.InputDir.y) != -1 && Mathf.Abs(playerController.InputDir.x) >= 0.1f) 
+        {
+            playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Walk]);
+        }
+
+        playerController.SetSpriteDir();
+    }
+
+    public override void FixedUpdate()
+    {
+        playerController.SimulateFinalVelocity();
+    }
+}
+
+public class Player_GroundSlide : PlayerState
+{
+    public Player_GroundSlide(PlayerController pc) : base(pc)
+    {
+
+    }
+
+    public override void Enter()
+    {
+        playerController.animator.Play(playerController.GroundSlide_HASH);
+    }
+
+
+    public override void Update()
+    {
+        base.Update();
+
+        if (Mathf.Sign(playerController.InputDir.y) != -1 && Mathf.Abs(playerController.InputDir.x) < 0.1f)
+        {
+            playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Idle]);
+        }
+
+        else if (Mathf.Sign(playerController.InputDir.y) == -1 && Mathf.Abs(playerController.InputDir.x) < 0.1f)
+        {
+            playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.CrouchIdle]);
+        }
+
+        else if (Mathf.Sign(playerController.InputDir.y) != -1 && Mathf.Abs(playerController.InputDir.x) >= 0.1f)
+        {
+            playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Walk]);
+        }
+    }
+
+    public override void FixedUpdate()
+    {
+        playerController.SimulateFinalVelocity();
+    }
+}
 public enum PlayerStateTypes
 {
-    Idle, Walk, Sprint, Brake, Jump, Fall, Attack01, Attack02, Attack03
+    Idle, Walk, Sprint, Brake, Jump, Fall, CrouchIdle, CrouchMove, GroundSlide, WallSlide, Attack01, Attack02, Attack03
 }
