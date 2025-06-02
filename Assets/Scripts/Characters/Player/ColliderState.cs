@@ -1,7 +1,4 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
-using static UnityEngine.UI.Image;
 
 public class ColliderState : MonoBehaviour
 {
@@ -10,10 +7,13 @@ public class ColliderState : MonoBehaviour
     // 45도 기준 Wall vs Ground
     [SerializeField] LayerMask layerMask;
     [SerializeField] float groundRayRadius;
+    [SerializeField] float coyoteTime;
+    public float coyoteTimeCounter;
     public Collider[] groundHitColids;
     public bool isGroundCheckWait;
     public bool isGrounded;
     Vector3 groundNormal = Vector3.zero;
+    public Vector3 groundHitPos;
 
 
     public bool isWallSide;
@@ -28,12 +28,17 @@ public class ColliderState : MonoBehaviour
 
     public void GroundCheck()
     {
-        if (isGroundCheckWait) return;
-
         groundHitColids = Physics.OverlapSphere(transform.position, groundRayRadius, layerMask);
         if (groundHitColids.Length > 0)
         {
             isGrounded = true;
+            coyoteTimeCounter = coyoteTime;
+        }
+        else
+        {
+            isGrounded = false;
+            coyoteTimeCounter -= Time.fixedDeltaTime;
+            return;
         }
 
         // 목표 : 현재 접지한 가장 가까운 콜라이더의 충돌 지점에서의 법선 벡터 반환
@@ -41,6 +46,7 @@ public class ColliderState : MonoBehaviour
         {
             Vector3 point = col.ClosestPoint(transform.position);
             Debug.DrawLine(point, point + col.transform.up * 10f, Color.red);
+            groundHitPos = point;
             groundNormal = col.transform.up;
         }
     }
@@ -51,6 +57,6 @@ public class ColliderState : MonoBehaviour
         Gizmos.DrawWireSphere(transform.position, groundRayRadius);
 
     }
-    
+
 }
 

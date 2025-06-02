@@ -21,6 +21,8 @@ public class PlayerController : CharacterControllerBase
 
     [SerializeField] float moveSpeedLimit = 0.16f;
     [SerializeField] float moveAccelation = 10f;
+    [SerializeField] float sprintSpeedLimit = 0.16f;
+    [SerializeField] float sprintAccelation = 10f;
     [SerializeField] float dragAccelation = 6f;
     [SerializeField] float customGravity = -10f;
     [SerializeField] float jumpVelocity = 15f;
@@ -56,6 +58,7 @@ public class PlayerController : CharacterControllerBase
         stateMachine = new StateMachine<PlayerStateTypes>();
         stateMachine.stateDic.Add(PlayerStateTypes.Idle, new Player_Idle(this));
         stateMachine.stateDic.Add(PlayerStateTypes.Walk, new Player_Walk(this));
+        stateMachine.stateDic.Add(PlayerStateTypes.Sprint, new Player_Sprint(this));
         stateMachine.stateDic.Add(PlayerStateTypes.Jump, new Player_Jump(this));
         stateMachine.stateDic.Add(PlayerStateTypes.Fall, new Player_Fall(this));
         stateMachine.CurState = stateMachine.stateDic[PlayerStateTypes.Idle];
@@ -166,10 +169,9 @@ public class PlayerController : CharacterControllerBase
 
     public Vector3 GetFinalVelocity()
     {
-        Vector2 currentVelocity = finalVelocity;
         Vector2 newTotalVelocity = GetGroundSideVelocity() + GetGroundDrag();
 
-        finalVelocity = currentVelocity + newTotalVelocity * Time.fixedDeltaTime;
+        finalVelocity += newTotalVelocity * Time.fixedDeltaTime;
 
         return finalVelocity;
     }
@@ -178,25 +180,43 @@ public class PlayerController : CharacterControllerBase
     {
         Vector2 currentVelocity = finalVelocity;
         Vector2 sideMoveForce;
-
         // 횡이동 입력값이 있을 때 => 횡이동 처리
         if (InputDir.x != 0)
         {
-            // 최대 속도에 도달 && 입력과 진행방향이 같을 때 
-            if (Mathf.Abs(currentVelocity.x) >= moveSpeedLimit && Mathf.Sign(currentVelocity.x) == Mathf.Sign(InputDir.x))
+            if (!isSprintInput)
             {
-                // 횡 속도 limit 고정
-                currentVelocity.x = moveSpeedLimit * Mathf.Sign(currentVelocity.x);
+                // 최대 속도에 도달 && 입력과 진행방향이 같을 때 
+                if (Mathf.Abs(currentVelocity.x) >= moveSpeedLimit && Mathf.Sign(currentVelocity.x) == Mathf.Sign(InputDir.x))
+                {
+                    // 횡 속도 limit 고정
+                    finalVelocity.x = moveSpeedLimit * Mathf.Sign(currentVelocity.x);
 
-                // 가속력 0으로 설정
-                sideMoveForce = Vector2.zero;
+                    // 가속력 0으로 설정
+                    sideMoveForce = Vector2.zero;
+                }
+                // 그 외에 상황에서는 가속or감속
+                else
+                {
+                    sideMoveForce = (Vector2.right * InputDir.x).normalized * moveAccelation / 10f;
+                }
             }
-            // 그 외에 상황에서는 가속or감속
             else
             {
-                sideMoveForce = (Vector2.right * InputDir.x).normalized * moveAccelation / 10f;
-            }
+                // 최대 속도에 도달 && 입력과 진행방향이 같을 때 
+                if (Mathf.Abs(currentVelocity.x) >= sprintSpeedLimit && Mathf.Sign(currentVelocity.x) == Mathf.Sign(InputDir.x))
+                {
+                    // 횡 속도 limit 고정
+                    finalVelocity.x = sprintSpeedLimit * Mathf.Sign(currentVelocity.x);
 
+                    // 가속력 0으로 설정
+                    sideMoveForce = Vector2.zero;
+                }
+                // 그 외에 상황에서는 가속or감속
+                else
+                {
+                    sideMoveForce = (Vector2.right * InputDir.x).normalized * sprintAccelation / 10f;
+                }
+            }
             return sideMoveForce;
         }
         else return Vector2.zero;
@@ -211,7 +231,7 @@ public class PlayerController : CharacterControllerBase
             Vector2 dragForce;
 
             // 일정 속도 이상일 때 감속
-            if (Mathf.Abs(currentVelocity.x) > 0.01f)
+            if (Mathf.Abs(currentVelocity.x) > 0.03f)
             {
                 dragForce = -(Vector2.right * currentVelocity.x).normalized * dragAccelation / 10f;
                 return dragForce;
