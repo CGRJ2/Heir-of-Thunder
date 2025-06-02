@@ -8,15 +8,12 @@ public class PlayerController : CharacterControllerBase
     public bool isJumpInput;
     private InputAction sprintAction;
     private InputAction jumpAction;
-
+    public Collider playerCollider;
 
     [HideInInspector] public StateMachine<PlayerStateTypes> stateMachine;
     [HideInInspector] public CinemachineFramingTransposer cinemachineFrame;
     [SerializeField] private CinemachineVirtualCamera virtualCam;
-    public float cineFrameOffsetX;
-    public float cineFrameOffsetY;
-
-
+    [SerializeField] Vector2 cineFrameOffset;
 
 
     [SerializeField] float moveSpeedLimit = 0.16f;
@@ -33,7 +30,8 @@ public class PlayerController : CharacterControllerBase
     Rigidbody rb;
 
     public Vector2 InputDir { get; private set; }
-    public Vector2 finalVelocity;
+    public Vector2 finalHorizontalVelocity;
+    public Vector2 finalVerticalVelocity;
     //public Vector2 totalVerticalVelocity;
 
     public readonly int IDLE_HASH = Animator.StringToHash("Idle");
@@ -140,12 +138,12 @@ public class PlayerController : CharacterControllerBase
         if (InputDir.x < 0)
         {
             spriteRenderer.flipX = true;
-            cinemachineFrame.m_TrackedObjectOffset = new Vector3(-10, 2, 0);
+            cinemachineFrame.m_TrackedObjectOffset = new Vector3(-cineFrameOffset.x, cineFrameOffset.y, 0);
         }
         else if (InputDir.x > 0)
         {
             spriteRenderer.flipX = false;
-            cinemachineFrame.m_TrackedObjectOffset = new Vector3(10, 2, 0);
+            cinemachineFrame.m_TrackedObjectOffset = new Vector3(cineFrameOffset.x, cineFrameOffset.y, 0);
         }
     }
 
@@ -171,14 +169,14 @@ public class PlayerController : CharacterControllerBase
     {
         Vector2 newTotalVelocity = GetGroundSideVelocity() + GetGroundDrag();
 
-        finalVelocity += newTotalVelocity * Time.fixedDeltaTime;
+        finalHorizontalVelocity += newTotalVelocity * Time.fixedDeltaTime;
 
-        return finalVelocity;
+        return finalHorizontalVelocity + finalVerticalVelocity;
     }
 
     public Vector2 GetGroundSideVelocity()
     {
-        Vector2 currentVelocity = finalVelocity;
+        Vector2 currentVelocity = finalHorizontalVelocity;
         Vector2 sideMoveForce;
         // 횡이동 입력값이 있을 때 => 횡이동 처리
         if (InputDir.x != 0)
@@ -189,7 +187,7 @@ public class PlayerController : CharacterControllerBase
                 if (Mathf.Abs(currentVelocity.x) >= moveSpeedLimit && Mathf.Sign(currentVelocity.x) == Mathf.Sign(InputDir.x))
                 {
                     // 횡 속도 limit 고정
-                    finalVelocity.x = moveSpeedLimit * Mathf.Sign(currentVelocity.x);
+                    finalHorizontalVelocity = playerCollider.transform.right * moveSpeedLimit * Mathf.Sign(currentVelocity.x);
 
                     // 가속력 0으로 설정
                     sideMoveForce = Vector2.zero;
@@ -197,7 +195,7 @@ public class PlayerController : CharacterControllerBase
                 // 그 외에 상황에서는 가속or감속
                 else
                 {
-                    sideMoveForce = (Vector2.right * InputDir.x).normalized * moveAccelation / 10f;
+                    sideMoveForce = (playerCollider.transform.right * InputDir.x).normalized * moveAccelation / 10f;
                 }
             }
             else
@@ -206,7 +204,7 @@ public class PlayerController : CharacterControllerBase
                 if (Mathf.Abs(currentVelocity.x) >= sprintSpeedLimit && Mathf.Sign(currentVelocity.x) == Mathf.Sign(InputDir.x))
                 {
                     // 횡 속도 limit 고정
-                    finalVelocity.x = sprintSpeedLimit * Mathf.Sign(currentVelocity.x);
+                    finalHorizontalVelocity = playerCollider.transform.right * sprintSpeedLimit * Mathf.Sign(currentVelocity.x);
 
                     // 가속력 0으로 설정
                     sideMoveForce = Vector2.zero;
@@ -214,7 +212,7 @@ public class PlayerController : CharacterControllerBase
                 // 그 외에 상황에서는 가속or감속
                 else
                 {
-                    sideMoveForce = (Vector2.right * InputDir.x).normalized * sprintAccelation / 10f;
+                    sideMoveForce = (playerCollider.transform.right * InputDir.x).normalized * sprintAccelation / 10f;
                 }
             }
             return sideMoveForce;
@@ -227,20 +225,20 @@ public class PlayerController : CharacterControllerBase
         // 횡 이동 입력값이 없다면 => 서서히 감속
         if (InputDir.x == 0)
         {
-            Vector2 currentVelocity = finalVelocity;
+            Vector2 currentVelocity = finalHorizontalVelocity;
             Vector2 dragForce;
 
             // 일정 속도 이상일 때 감속
             if (Mathf.Abs(currentVelocity.x) > 0.03f)
             {
-                dragForce = -(Vector2.right * currentVelocity.x).normalized * dragAccelation / 10f;
+                dragForce = -(playerCollider.transform.right * currentVelocity.x).normalized * dragAccelation / 10f;
                 return dragForce;
             }
             // 일정 속도 이하라면 finalVelocity = zero로 반환해 정지
             else
             {
                 // 횡 이동 속도 0으로 설정 후 zero 반환
-                finalVelocity.x = 0;
+                finalHorizontalVelocity = Vector2.zero;
                 return Vector2.zero;
             }
         }
@@ -249,18 +247,18 @@ public class PlayerController : CharacterControllerBase
 
     public void SetJumpVelocity()
     {
-        finalVelocity.y = jumpVelocity * Time.fixedDeltaTime;
+        finalVerticalVelocity.y = jumpVelocity * Time.fixedDeltaTime;
     }
 
     public void ApplyGravity()
     {
-        if (finalVelocity.y > -fallingVelocityLimit)
+        if (finalVerticalVelocity.y > -fallingVelocityLimit)
         {
-            finalVelocity.y -= customGravity * Time.fixedDeltaTime;
+            finalVerticalVelocity.y -= customGravity * Time.fixedDeltaTime;
         }
         else
         {
-            finalVelocity.y = -fallingVelocityLimit;
+            finalVerticalVelocity.y = -fallingVelocityLimit;
         }
     }
 
@@ -269,8 +267,8 @@ public class PlayerController : CharacterControllerBase
     {
         if (isJumpCut)
         {
-            if (finalVelocity.y > -fallingVelocityLimit)
-                finalVelocity.y -= jumpCutVelocity * Time.fixedDeltaTime;
+            if (finalVerticalVelocity.y > -fallingVelocityLimit)
+                finalVerticalVelocity.y -= jumpCutVelocity * Time.fixedDeltaTime;
         }
     }
 

@@ -61,13 +61,12 @@ public class Player_Idle : PlayerState
     public override void Enter()
     {
         playerController.animator.Play(playerController.IDLE_HASH);
-        Debug.Log("아이들 전환");
     }
 
     public override void Update()
     {
         base.Update();
-        if (Mathf.Abs(playerController.InputDir.x) > 0.1f) // 여기 조건문 추가 필요. 점프 아닐 때, 그라운드 이동일 때.
+        if (Mathf.Abs(playerController.InputDir.x) > 0.1f) 
         {
             playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Walk]);
         }
@@ -111,6 +110,7 @@ public class Player_Walk : PlayerState
     }
     public override void FixedUpdate()
     {
+        Debug.Log(playerController.finalHorizontalVelocity);
         playerController.SimulateFinalVelocity();
     }
     public override void Exit() { }
@@ -162,6 +162,7 @@ public class Player_Jump : PlayerState
     {
         playerController.animator.Play(playerController.JUMP_HASH);
         playerController.SetJumpVelocity();
+        colliderState.SetColliderToQuaternion(Quaternion.identity);
         colliderState.isGrounded = false;
         colliderState.isGroundCheckWait = true;
     }
@@ -170,7 +171,7 @@ public class Player_Jump : PlayerState
     {
         base.Update();
 
-        if (playerController.finalVelocity.y <= 0)
+        if (playerController.finalVerticalVelocity.y <= 0)
             playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Fall]);
 
         // 왼쪽 오른쪽 방향 전환.
@@ -200,7 +201,13 @@ public class Player_Fall : PlayerState
     public override void Enter()
     {
         playerController.animator.Play(playerController.FALL_HASH);
+        colliderState.SetColliderToQuaternion(Quaternion.identity);
         colliderState.isGroundCheckWait = false;
+    }
+
+    public override void Exit()
+    {
+        base.Exit();
     }
 
     public override void Update()
@@ -241,17 +248,19 @@ public class Player_Fall : PlayerState
             // 플래그 설정
             groundLanded = true;
 
-            // 점프 종료, 입력이 있으면 이동or달리기 상태로 전환, 없으면 Idle로 전환
-            playerController.finalVelocity.y = 0;
+            // 바닥에 닿음. 수직 속도 0으로 설정
+            playerController.finalVerticalVelocity = Vector2.zero;
 
             // 현재 Ground 오브젝트의 Y값으로 위치 설정
             // 여기를 점 점으로 맞춰줘야함
             // Todo: 바닥 법선벡터에 플레이어 맞추기, 바닥에 맞춰서 콜라이더 각도&위치 맞추기
             //playerController.SetGroundPosY(colliderState.groundHitColids[0].transform.parent.position.y);
-            playerController.SetGroundPosY(colliderState.groundHitPos.y);
+            colliderState.SetColliderToQuaternion(colliderState.groundHitColids[0].transform.rotation);
+            // 기존 이동 벡터 -> 바닥 각도에 맞는 이동 벡터로 변환
+            playerController.finalHorizontalVelocity = playerController.finalHorizontalVelocity.magnitude * playerController.playerCollider.transform.right * Mathf.Sign(playerController.finalHorizontalVelocity.x);
+            playerController.transform.position = colliderState.groundHitPos;
 
             // 점프 계속 입력 시 다시 점프, 입력없을 시 Idle상태로 전환
-            
         }
     }
 }
