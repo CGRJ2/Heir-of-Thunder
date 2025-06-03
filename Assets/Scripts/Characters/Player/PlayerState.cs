@@ -2,14 +2,14 @@ using UnityEngine;
 
 public class PlayerState : BaseState
 {
-    protected PlayerController playerController;
+    protected PlayerController pc;
     protected ColliderState colliderState;
     public bool isJumping;
     public bool isCrouching;
 
     public PlayerState(PlayerController pc)
     {
-        playerController = pc;
+        this.pc = pc;
         colliderState = pc.GetComponent<ColliderState>();
     }
     public override void Enter() { }
@@ -18,25 +18,25 @@ public class PlayerState : BaseState
         // 모든 상태에서 조건에 의해 전환 가능한 상태들
 
         //#점프 가능 조건
-        if (playerController.isJumpInput)
+        if (pc.isJumpInput)
         {
             // 일반 점프 가능 조건
             if (colliderState.isGrounded)
             {
                 isJumping = true;
 
-                playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Jump]);
+                pc.stateMachine.ChangeState(pc.stateMachine.stateDic[PlayerStateTypes.Jump]);
             }
             // 코요테 점프 가능 조건
             else if (colliderState.coyoteTimeCounter > 0f && !isJumping &&
-                playerController.stateMachine.CurState != playerController.stateMachine.stateDic[PlayerStateTypes.Jump])
+                pc.stateMachine.CurState != pc.stateMachine.stateDic[PlayerStateTypes.Jump])
             {
                 isJumping = true;
 
-                playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Jump]);
+                pc.stateMachine.ChangeState(pc.stateMachine.stateDic[PlayerStateTypes.Jump]);
             }
             // 더블 점프 가능 조건
-            /*else if (isJumping && 2단 점프 가능)
+            /*else if (isJumping && 2단 점프 가능[어빌리티 매니저에서 더블점프 능력이 활성화 되었다면])
             {
                 playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.DoubleJump]);
             }*/
@@ -45,28 +45,31 @@ public class PlayerState : BaseState
         //#방향키 아래(웅크리기, 앉아 걷기, 지면 슬라이딩) 조건들
         // 떨어지는 상태에서 지면에 닿자마자 상태 변환하면 안되기에 예외처리
         // Fall 상태의 FixedUpdate에서 플레이어의 발을 지면에 스냅하는 로직이 있기 때문.
-        if (Mathf.Sign(playerController.InputDir.y) == -1 && colliderState.isGrounded && playerController.stateMachine.CurState != playerController.stateMachine.stateDic[PlayerStateTypes.Fall])
+        if (Mathf.Sign(pc.InputDir.y) == -1 && colliderState.isGrounded && pc.stateMachine.CurState != pc.stateMachine.stateDic[PlayerStateTypes.Fall])
         {
-            if (playerController.finalHorizontalVelocity.magnitude > playerController.GetSlidingSpeedMin())
+            if (pc.finalHorizontalVelocity.magnitude > pc.GetSlidingSpeedMin())
             {
-                playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.GroundSlide]);
+                pc.stateMachine.ChangeState(pc.stateMachine.stateDic[PlayerStateTypes.GroundSlide]);
             }
-            else if (playerController.finalHorizontalVelocity.magnitude < 0.1f)
+            else if (pc.finalHorizontalVelocity.magnitude < 0.1f)
             {
-                playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.CrouchIdle]);
+                pc.stateMachine.ChangeState(pc.stateMachine.stateDic[PlayerStateTypes.CrouchIdle]);
             }
             else
             {
-                playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.CrouchMove]);
+                pc.stateMachine.ChangeState(pc.stateMachine.stateDic[PlayerStateTypes.CrouchMove]);
             }
         }
 
         //#낙하 조건
         if (!colliderState.isGrounded &&
-            playerController.stateMachine.CurState != playerController.stateMachine.stateDic[PlayerStateTypes.Jump])
+            pc.stateMachine.CurState != pc.stateMachine.stateDic[PlayerStateTypes.Jump])
         {
-            playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Fall]);
+            pc.stateMachine.ChangeState(pc.stateMachine.stateDic[PlayerStateTypes.Fall]);
         }
+
+        
+
     }
 
     public override void Exit() { }
@@ -81,15 +84,15 @@ public class Player_Idle : PlayerState
 
     public override void Enter()
     {
-        playerController.animator.Play(playerController.IDLE_HASH);
+        pc.animator.Play(pc.IDLE_HASH);
     }
 
     public override void Update()
     {
         base.Update();
-        if (Mathf.Abs(playerController.InputDir.x) > 0.1f)
+        if (Mathf.Abs(pc.InputDir.x) > 0.1f)
         {
-            playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Walk]);
+            pc.stateMachine.ChangeState(pc.stateMachine.stateDic[PlayerStateTypes.Walk]);
         }
 
         /*if (Mathf.Sign(playerController.InputDir.y) == -1)
@@ -101,7 +104,7 @@ public class Player_Idle : PlayerState
     public override void FixedUpdate()
     {
         // Velocity 초기화 용도
-        playerController.SimulateFinalVelocity();
+        pc.SimulateFinalVelocity();
     }
     public override void Exit() { }
 }
@@ -114,29 +117,29 @@ public class Player_Walk : PlayerState
     }
     public override void Enter()
     {
-        playerController.animator.Play(playerController.WALK_HASH);
+        pc.animator.Play(pc.WALK_HASH);
     }
     public override void Update()
     {
         base.Update();
 
-        if (playerController.isSprintInput && colliderState.isGrounded)
+        if (pc.isSprintInput && colliderState.isGrounded)
         {
-            playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Sprint]);
+            pc.stateMachine.ChangeState(pc.stateMachine.stateDic[PlayerStateTypes.Sprint]);
         }
 
         // Idle 전이.
-        if (Mathf.Abs(playerController.InputDir.x) < 0.1f) // 조건 추가 필요
+        if (Mathf.Abs(pc.InputDir.x) < 0.1f) // 조건 추가 필요
         {
-            playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Idle]);
+            pc.stateMachine.ChangeState(pc.stateMachine.stateDic[PlayerStateTypes.Idle]);
         }
 
         // 왼쪽 오른쪽 방향 전환.
-        playerController.SetSpriteDir();
+        pc.SetSpriteDir();
     }
     public override void FixedUpdate()
     {
-        playerController.SimulateFinalVelocity();
+        pc.SimulateFinalVelocity();
     }
     public override void Exit() { }
 }
@@ -149,28 +152,28 @@ public class Player_Sprint : PlayerState
     }
     public override void Enter()
     {
-        playerController.animator.Play(playerController.SPRINT_HASH);
+        pc.animator.Play(pc.SPRINT_HASH);
     }
     public override void Update()
     {
         base.Update();
 
-        if (!playerController.isSprintInput && colliderState.isGrounded)
+        if (!pc.isSprintInput && colliderState.isGrounded)
         {
-            playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Walk]);
+            pc.stateMachine.ChangeState(pc.stateMachine.stateDic[PlayerStateTypes.Walk]);
         }
 
-        if (Mathf.Abs(playerController.InputDir.x) < 0.1f)
+        if (Mathf.Abs(pc.InputDir.x) < 0.1f)
         {
-            playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Idle]);
+            pc.stateMachine.ChangeState(pc.stateMachine.stateDic[PlayerStateTypes.Idle]);
         }
 
         // 왼쪽 오른쪽 방향 전환.
-        playerController.SetSpriteDir();
+        pc.SetSpriteDir();
     }
     public override void FixedUpdate()
     {
-        playerController.SimulateFinalVelocity();
+        pc.SimulateFinalVelocity();
     }
     public override void Exit() { }
 
@@ -185,8 +188,8 @@ public class Player_Jump : PlayerState
 
     public override void Enter()
     {
-        playerController.animator.Play(playerController.JUMP_HASH);
-        playerController.SetJumpVelocity();
+        pc.animator.Play(pc.JUMP_HASH);
+        pc.SetJumpVelocity();
         colliderState.SetColliderToQuaternion(Quaternion.identity);
         colliderState.isGrounded = false;
         colliderState.isGroundCheckWait = true;
@@ -196,21 +199,21 @@ public class Player_Jump : PlayerState
     {
         base.Update();
 
-        if (playerController.finalVerticalVelocity.y <= 0)
-            playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Fall]);
+        if (pc.finalVerticalVelocity.y <= 0)
+            pc.stateMachine.ChangeState(pc.stateMachine.stateDic[PlayerStateTypes.Fall]);
 
         // 왼쪽 오른쪽 방향 전환.
-        playerController.SetSpriteDir();
+        pc.SetSpriteDir();
     }
 
     public override void FixedUpdate()
     {
         // 중력 계속 적용
-        playerController.ApplyGravity();
-        playerController.ApplyJumpCut();
+        pc.ApplyGravity();
+        pc.ApplyJumpCut();
 
         // 점프 테스트용. 삭제필요
-        playerController.SimulateFinalVelocity();
+        pc.SimulateFinalVelocity();
     }
 }
 
@@ -225,7 +228,7 @@ public class Player_Fall : PlayerState
 
     public override void Enter()
     {
-        playerController.animator.Play(playerController.FALL_HASH);
+        pc.animator.Play(pc.FALL_HASH);
         colliderState.SetColliderToQuaternion(Quaternion.identity);
         colliderState.isGroundCheckWait = false;
     }
@@ -240,23 +243,23 @@ public class Player_Fall : PlayerState
         base.Update();
 
         // 왼쪽 오른쪽 방향 전환.
-        playerController.SetSpriteDir();
+        pc.SetSpriteDir();
 
         if (groundLanded)
         {
             // 플래그 리셋
             groundLanded = false;
 
-            if (playerController.isJumpInput)
-                playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Jump]);
-            else if (Mathf.Abs(playerController.InputDir.x) > 0.1f)
+            if (pc.isJumpInput)
+                pc.stateMachine.ChangeState(pc.stateMachine.stateDic[PlayerStateTypes.Jump]);
+            else if (Mathf.Abs(pc.InputDir.x) > 0.1f)
             {
-                playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Walk]);
+                pc.stateMachine.ChangeState(pc.stateMachine.stateDic[PlayerStateTypes.Walk]);
                 isJumping = false;
             }
             else
             {
-                playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Idle]);
+                pc.stateMachine.ChangeState(pc.stateMachine.stateDic[PlayerStateTypes.Idle]);
                 isJumping = false;
             }
         }
@@ -268,9 +271,9 @@ public class Player_Fall : PlayerState
         if (!colliderState.isGrounded)
         {
             // 중력 계속 적용
-            playerController.ApplyGravity();
+            pc.ApplyGravity();
 
-            playerController.SimulateFinalVelocity();
+            pc.SimulateFinalVelocity();
         }
         // 콜라이더 상태 : isGrounded가 true라면
         else
@@ -279,16 +282,14 @@ public class Player_Fall : PlayerState
             groundLanded = true;
 
             // 바닥에 닿음. 수직 속도 0으로 설정
-            playerController.finalVerticalVelocity = Vector2.zero;
+            pc.finalVerticalVelocity = Vector2.zero;
 
-            // 현재 Ground 오브젝트의 Y값으로 위치 설정
-            // 여기를 점 점으로 맞춰줘야함
-            // Todo: 바닥 법선벡터에 플레이어 맞추기, 바닥에 맞춰서 콜라이더 각도&위치 맞추기
-            //playerController.SetGroundPosY(colliderState.groundHitColids[0].transform.parent.position.y);
+            // 플레이어 콜라이더를 현재 Ground 오브젝트의 접점 위치에 맞추기 & 바닥 법선벡터 각도로 맞추기
             colliderState.SetColliderToQuaternion(colliderState.groundHitColids[0].transform.rotation);
+            pc.transform.position = colliderState.groundHitPos;
+            
             // 기존 이동 벡터 -> 바닥 각도에 맞는 이동 벡터로 변환
-            playerController.finalHorizontalVelocity = playerController.finalHorizontalVelocity.magnitude * playerController.playerCollider.transform.right * Mathf.Sign(playerController.finalHorizontalVelocity.x);
-            playerController.transform.position = colliderState.groundHitPos;
+            pc.finalHorizontalVelocity = pc.finalHorizontalVelocity.magnitude * pc.playerCollider.transform.right * Mathf.Sign(pc.finalHorizontalVelocity.x);
 
             // 점프 계속 입력 시 다시 점프, 입력없을 시 Idle상태로 전환
         }
@@ -304,7 +305,7 @@ public class Player_CrouchIdle : PlayerState
 
     public override void Enter()
     {
-        playerController.animator.Play(playerController.CrouchIdle_HASH);
+        pc.animator.Play(pc.CrouchIdle_HASH);
     }
 
 
@@ -312,20 +313,20 @@ public class Player_CrouchIdle : PlayerState
     {
         base.Update();
 
-        if (Mathf.Sign(playerController.InputDir.y) != -1)
+        if (Mathf.Sign(pc.InputDir.y) != -1)
         {
-            playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Idle]);
+            pc.stateMachine.ChangeState(pc.stateMachine.stateDic[PlayerStateTypes.Idle]);
         }
 
-        else if (Mathf.Abs(playerController.InputDir.x) > 0.1f)
+        else if (Mathf.Abs(pc.InputDir.x) > 0.1f)
         {
-            playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.CrouchMove]);
+            pc.stateMachine.ChangeState(pc.stateMachine.stateDic[PlayerStateTypes.CrouchMove]);
         }
     }
 
     public override void FixedUpdate()
     {
-        playerController.SimulateFinalVelocity();
+        pc.SimulateFinalVelocity();
     }
 }
 
@@ -338,34 +339,34 @@ public class Player_CrouchMove : PlayerState
 
     public override void Enter()
     {
-        playerController.animator.Play(playerController.CrouchMove_HASH);
+        pc.animator.Play(pc.CrouchMove_HASH);
     }
 
     public override void Update()
     {
         base.Update();
 
-        if (Mathf.Sign(playerController.InputDir.y) != -1 && Mathf.Abs(playerController.InputDir.x) < 0.1f)
+        if (Mathf.Sign(pc.InputDir.y) != -1 && Mathf.Abs(pc.InputDir.x) < 0.1f)
         {
-            playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Idle]);
+            pc.stateMachine.ChangeState(pc.stateMachine.stateDic[PlayerStateTypes.Idle]);
         }
 
-        else if (Mathf.Sign(playerController.InputDir.y) == -1 && Mathf.Abs(playerController.InputDir.x) < 0.1f)
+        else if (Mathf.Sign(pc.InputDir.y) == -1 && Mathf.Abs(pc.InputDir.x) < 0.1f)
         {
-            playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.CrouchIdle]);
+            pc.stateMachine.ChangeState(pc.stateMachine.stateDic[PlayerStateTypes.CrouchIdle]);
         }
 
-        else if (Mathf.Sign(playerController.InputDir.y) != -1 && Mathf.Abs(playerController.InputDir.x) >= 0.1f) 
+        else if (Mathf.Sign(pc.InputDir.y) != -1 && Mathf.Abs(pc.InputDir.x) >= 0.1f) 
         {
-            playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Walk]);
+            pc.stateMachine.ChangeState(pc.stateMachine.stateDic[PlayerStateTypes.Walk]);
         }
 
-        playerController.SetSpriteDir();
+        pc.SetSpriteDir();
     }
 
     public override void FixedUpdate()
     {
-        playerController.SimulateFinalVelocity();
+        pc.SimulateFinalVelocity();
     }
 }
 
@@ -378,7 +379,7 @@ public class Player_GroundSlide : PlayerState
 
     public override void Enter()
     {
-        playerController.animator.Play(playerController.GroundSlide_HASH);
+        pc.animator.Play(pc.GroundSlide_HASH);
     }
 
 
@@ -386,28 +387,92 @@ public class Player_GroundSlide : PlayerState
     {
         base.Update();
 
-        if (Mathf.Sign(playerController.InputDir.y) != -1 && Mathf.Abs(playerController.InputDir.x) < 0.1f)
+        if (Mathf.Sign(pc.InputDir.y) != -1 && Mathf.Abs(pc.InputDir.x) < 0.1f)
         {
-            playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Idle]);
+            pc.stateMachine.ChangeState(pc.stateMachine.stateDic[PlayerStateTypes.Idle]);
         }
 
-        else if (Mathf.Sign(playerController.InputDir.y) == -1 && Mathf.Abs(playerController.InputDir.x) < 0.1f)
+        else if (Mathf.Sign(pc.InputDir.y) == -1 && Mathf.Abs(pc.InputDir.x) < 0.1f)
         {
-            playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.CrouchIdle]);
+            pc.stateMachine.ChangeState(pc.stateMachine.stateDic[PlayerStateTypes.CrouchIdle]);
         }
 
-        else if (Mathf.Sign(playerController.InputDir.y) != -1 && Mathf.Abs(playerController.InputDir.x) >= 0.1f)
+        else if (Mathf.Sign(pc.InputDir.y) != -1 && Mathf.Abs(pc.InputDir.x) >= 0.1f)
         {
-            playerController.stateMachine.ChangeState(playerController.stateMachine.stateDic[PlayerStateTypes.Walk]);
+            pc.stateMachine.ChangeState(pc.stateMachine.stateDic[PlayerStateTypes.Walk]);
         }
     }
 
     public override void FixedUpdate()
     {
-        playerController.SimulateFinalVelocity();
+        pc.SimulateFinalVelocity();
     }
 }
+
+public class Player_Attack : PlayerState
+{
+    private float coolTime;
+    private float chainTime;
+    private int index;
+    public Player_Attack(PlayerController pc) : base(pc)
+    {
+
+    }
+    public override void Enter()
+    {
+        pc.isAttackInput = true;
+
+        index = 0;
+        AttackPlayByIndex();
+    }
+    public override void Update()
+    {
+        base.Update();
+
+        coolTime -= Time.deltaTime;
+        chainTime -= Time.deltaTime;
+
+        // Idle 전이.
+        if (chainTime < 0f)
+        {
+            pc.stateMachine.ChangeState(pc.stateMachine.stateDic[PlayerStateTypes.Idle]);
+        }
+
+        // 왼쪽 오른쪽 방향 전환.
+        pc.SetSpriteDir();
+    }
+    public override void FixedUpdate()
+    {
+        pc.SimulateFinalVelocity();
+    }
+    public override void Exit() { pc.isAttackInput = false; }
+
+    public void AttackPlayByIndex()
+    {
+        if (coolTime > 0) return;
+
+        switch (index)
+        {
+            case 0:
+                pc.animator.Play(pc.Attack01_HASH);
+                break;
+            case 1:
+                pc.animator.Play(pc.Attack02_HASH);
+                break;
+            case 2:
+                pc.animator.Play(pc.Attack03_HASH);
+                break;
+        }
+
+        coolTime = pc.attackCoolTime;
+        chainTime = pc.attackChainTime;
+        index += 1;
+        if (index > 2) index = 0;
+    }
+}
+
+
 public enum PlayerStateTypes
 {
-    Idle, Walk, Sprint, Brake, Jump, Fall, CrouchIdle, CrouchMove, GroundSlide, WallSlide, Attack01, Attack02, Attack03
+    Idle, Walk, Sprint, Brake, Jump, Fall, CrouchIdle, CrouchMove, GroundSlide, WallSlide, Attack
 }

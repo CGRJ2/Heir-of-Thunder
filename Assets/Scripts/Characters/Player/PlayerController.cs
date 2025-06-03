@@ -1,4 +1,5 @@
 using Cinemachine;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -6,10 +7,19 @@ public class PlayerController : CharacterControllerBase
 {
     public bool isSprintInput;
     public bool isJumpInput;
+    public bool isAttackInput;
+    public float attackCoolTime;
+    public float attackChainTime;
+    public bool isChargeInput;
     private InputAction sprintAction;
     private InputAction jumpAction;
+    private InputAction attackAction;
+    Coroutine attackRountine;
+    private InputAction chargeAction;
+
     public Collider playerCollider;
 
+    ColliderState colliderState;
     [HideInInspector] public StateMachine<PlayerStateTypes> stateMachine;
     [HideInInspector] public CinemachineFramingTransposer cinemachineFrame;
     [SerializeField] private CinemachineVirtualCamera virtualCam;
@@ -33,6 +43,7 @@ public class PlayerController : CharacterControllerBase
     Rigidbody rb;
 
     public Vector2 InputDir { get; private set; }
+    public Vector2 mouseWorldPos;
     public Vector2 finalHorizontalVelocity;
     public Vector2 finalVerticalVelocity;
     //public Vector2 totalVerticalVelocity;
@@ -46,6 +57,12 @@ public class PlayerController : CharacterControllerBase
     public readonly int CrouchIdle_HASH = Animator.StringToHash("CrouchIdle");
     public readonly int CrouchMove_HASH = Animator.StringToHash("CrouchMove");
     public readonly int GroundSlide_HASH = Animator.StringToHash("GroundSlide");
+
+    public readonly int Attack01_HASH = Animator.StringToHash("Attack01");
+    public readonly int Attack02_HASH = Animator.StringToHash("Attack02");
+    public readonly int Attack03_HASH = Animator.StringToHash("Attack03");
+
+
     public readonly int WallSlide_HASH = Animator.StringToHash("WallSlide");
 
     // 상태패턴으로 콜라이더 상태들을 정리하자
@@ -70,6 +87,9 @@ public class PlayerController : CharacterControllerBase
         stateMachine.stateDic.Add(PlayerStateTypes.CrouchMove, new Player_CrouchMove(this));
         stateMachine.stateDic.Add(PlayerStateTypes.GroundSlide, new Player_GroundSlide(this));
         //stateMachine.stateDic.Add(PlayerStateTypes.WallSlide, new Player_WallSlide(this));
+
+        stateMachine.stateDic.Add(PlayerStateTypes.Attack, new Player_Attack(this));
+
         stateMachine.CurState = stateMachine.stateDic[PlayerStateTypes.Idle];
     }
 
@@ -89,12 +109,25 @@ public class PlayerController : CharacterControllerBase
         jumpAction.Enable();
         jumpAction.performed += HandleJump;
         jumpAction.canceled += HandleJump;
+
+        // 공격 액션
+        attackAction = playerControlMap.FindAction("Attack");
+        attackAction.Enable();
+        attackAction.started += HandleAttack;
+        attackAction.canceled += HandleAttack;
+
+        // 차지 액션
+        chargeAction = playerControlMap.FindAction("Charge");
+        chargeAction.Enable();
+        chargeAction.started += HandleCharge;
+        chargeAction.canceled += HandleCharge;
     }
 
     private void Start()
     {
         rb = GetComponent<Rigidbody>();
         cinemachineFrame = virtualCam.GetCinemachineComponent<CinemachineFramingTransposer>();
+        colliderState = GetComponent<ColliderState>();
         StateMachineInit();
         InputActionsInit();
     }
@@ -105,13 +138,19 @@ public class PlayerController : CharacterControllerBase
         InputDir = value.Get<Vector2>();
     }
 
-    public void OnAttack(InputValue value)
-    {
 
-    }
+
+    /*public void OnAim(InputValue value)
+    {
+        mouseWorldPos = Camera.main.ScreenToWorldPoint(value.Get<Vector2>());
+
+        Debug.Log(mouseWorldPos);
+    }*/
     #endregion
 
     #region 지속 상태 Input ... 달리기, 점프, 차징
+
+    // 달리기 키 토글
     public void HandleSprint(InputAction.CallbackContext context)
     {
         if (context.performed)
@@ -120,6 +159,7 @@ public class PlayerController : CharacterControllerBase
             isSprintInput = false;
     }
 
+    // 점프 키 토글
     public void HandleJump(InputAction.CallbackContext context)
     {
         if (context.performed)
@@ -134,6 +174,56 @@ public class PlayerController : CharacterControllerBase
         }
     }
 
+    // 마우스 좌표 설정, Update에서 지속 갱신
+    void SetMousePos()
+    {
+        Vector2 mouseScreenPos = Mouse.current.position.ReadValue();
+        Vector3 mouseWorldPos = Camera.main.ScreenToWorldPoint(mouseScreenPos);
+        mouseWorldPos.z = 0;
+        this.mouseWorldPos = mouseWorldPos;
+    }
+
+    // 공격 키 토글
+    public void HandleAttack(InputAction.CallbackContext context)
+    {
+        if (context.started)
+        {
+            // 접지 상태 => 일반 공격
+            if (colliderState.isGrounded)
+            {
+                if (stateMachine.CurState is Player_Attack attackState)
+                {
+                    attackState.AttackPlayByIndex();
+                }
+                else
+                {
+                    stateMachine.ChangeState(stateMachine.stateDic[PlayerStateTypes.Attack]);
+                }
+
+            }
+            // 공중 상태 => 점프 공격
+            /*if (isJumping)
+            {
+
+            }*/
+        }
+    }
+    IEnumerator AttackRoutine()
+    {
+        isAttackInput = true;
+        yield return new WaitForSeconds(0.3f);
+        isAttackInput = false;
+    }
+
+    // 차지 키 토글
+    public void HandleCharge(InputAction.CallbackContext context)
+    {
+        if (context.started)
+            isChargeInput = true;
+        else if (context.canceled)
+            isChargeInput = false;
+    }
+
     #endregion
 
     private void OnDestroy()
@@ -142,6 +232,10 @@ public class PlayerController : CharacterControllerBase
         sprintAction.canceled -= HandleSprint;
         jumpAction.performed -= HandleJump;
         jumpAction.canceled -= HandleJump;
+        attackAction.started -= HandleAttack;
+        attackAction.canceled -= HandleAttack;
+        chargeAction.started -= HandleCharge;
+        chargeAction.canceled -= HandleCharge;
     }
 
     public void SetSpriteDir()
@@ -159,8 +253,10 @@ public class PlayerController : CharacterControllerBase
     }
 
 
+
     private void Update()
     {
+        SetMousePos();
         stateMachine.Update();
     }
     private void FixedUpdate()
@@ -287,14 +383,12 @@ public class PlayerController : CharacterControllerBase
             if (Mathf.Abs(currentVelocity.x) > 0.03f)
             {
                 dragForce = -(playerCollider.transform.right * currentVelocity.x).normalized * SlidingDragAccelation / 10f;
-                Debug.Log(currentVelocity.x);
                 return dragForce;
             }
             // 일정 속도 이하라면 finalVelocity = zero로 반환해 정지
             else
             {
                 // 횡 이동 속도 0으로 설정 후 zero 반환
-                Debug.LogError(currentVelocity.x);
                 finalHorizontalVelocity = Vector2.zero;
                 return Vector2.zero;
             }
