@@ -1,5 +1,4 @@
 using Cinemachine;
-using System.Collections;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -7,7 +6,6 @@ public class PlayerController : CharacterControllerBase
 {
     public bool isSprintInput;
     public bool isJumpInput;
-    public bool isAttackInput;
     public float attackCoolTime;
     public float attackChainTime;
     public bool isChargeInput;
@@ -43,6 +41,7 @@ public class PlayerController : CharacterControllerBase
     Rigidbody rb;
 
     public Vector2 InputDir { get; private set; }
+    public Vector2 AttackDir { get; private set; }
     public Vector2 mouseWorldPos;
     public Vector2 finalHorizontalVelocity;
     public Vector2 finalVerticalVelocity;
@@ -132,20 +131,11 @@ public class PlayerController : CharacterControllerBase
         InputActionsInit();
     }
 
-    #region 트리거형 Input ... 이동, 공격, 스킬, 상호작용, 아이템 사용
+    #region 트리거형 Input ... 이동
     public void OnMove(InputValue value)
     {
         InputDir = value.Get<Vector2>();
     }
-
-
-
-    /*public void OnAim(InputValue value)
-    {
-        mouseWorldPos = Camera.main.ScreenToWorldPoint(value.Get<Vector2>());
-
-        Debug.Log(mouseWorldPos);
-    }*/
     #endregion
 
     #region 지속 상태 Input ... 달리기, 점프, 차징
@@ -188,8 +178,9 @@ public class PlayerController : CharacterControllerBase
     {
         if (context.started)
         {
-            // 접지 상태 => 일반 공격
-            if (colliderState.isGrounded)
+            AttackDir = mouseWorldPos - (Vector2)transform.position;
+            // 접지 상태(&& Fall상태 예외처리) => 일반 공격
+            if (colliderState.isGrounded && stateMachine.CurState != stateMachine.stateDic[PlayerStateTypes.Fall])
             {
                 if (stateMachine.CurState is Player_Attack attackState)
                 {
@@ -207,12 +198,6 @@ public class PlayerController : CharacterControllerBase
 
             }*/
         }
-    }
-    IEnumerator AttackRoutine()
-    {
-        isAttackInput = true;
-        yield return new WaitForSeconds(0.3f);
-        isAttackInput = false;
     }
 
     // 차지 키 토글
@@ -240,15 +225,31 @@ public class PlayerController : CharacterControllerBase
 
     public void SetSpriteDir()
     {
-        if (InputDir.x < 0)
+        if (stateMachine.CurState is Player_Attack)
         {
-            spriteRenderer.flipX = true;
-            cinemachineFrame.m_TrackedObjectOffset = new Vector3(-cineFrameOffset.x, cineFrameOffset.y, 0);
+            if (AttackDir.x < 0)
+            {
+                spriteRenderer.flipX = true;
+                cinemachineFrame.m_TrackedObjectOffset = new Vector3(-cineFrameOffset.x, cineFrameOffset.y, 0);
+            }
+            else if (AttackDir.x > 0)
+            {
+                spriteRenderer.flipX = false;
+                cinemachineFrame.m_TrackedObjectOffset = new Vector3(cineFrameOffset.x, cineFrameOffset.y, 0);
+            }
         }
-        else if (InputDir.x > 0)
+        else
         {
-            spriteRenderer.flipX = false;
-            cinemachineFrame.m_TrackedObjectOffset = new Vector3(cineFrameOffset.x, cineFrameOffset.y, 0);
+            if (InputDir.x < 0)
+            {
+                spriteRenderer.flipX = true;
+                cinemachineFrame.m_TrackedObjectOffset = new Vector3(-cineFrameOffset.x, cineFrameOffset.y, 0);
+            }
+            else if (InputDir.x > 0)
+            {
+                spriteRenderer.flipX = false;
+                cinemachineFrame.m_TrackedObjectOffset = new Vector3(cineFrameOffset.x, cineFrameOffset.y, 0);
+            }
         }
     }
 
@@ -266,10 +267,6 @@ public class PlayerController : CharacterControllerBase
     public void SimulateFinalVelocity()
     {
         transform.position += GetFinalVelocity();
-    }
-    public void SetGroundPosY(float y)
-    {
-        transform.position = new Vector2(transform.position.x, y);
     }
 
     public Vector3 GetFinalVelocity()
@@ -332,6 +329,7 @@ public class PlayerController : CharacterControllerBase
                 // 가속력 0으로 설정
                 sideMoveForce = Vector2.zero;
             }
+
             // 일반 이동 상태
             else
             {
@@ -350,6 +348,7 @@ public class PlayerController : CharacterControllerBase
                     sideMoveForce = (playerCollider.transform.right * InputDir.x).normalized * moveAccelation / 10f;
                 }
             }
+
             return sideMoveForce;
         }
         else return Vector2.zero;

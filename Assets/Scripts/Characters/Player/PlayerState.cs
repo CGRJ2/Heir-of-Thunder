@@ -250,13 +250,16 @@ public class Player_Fall : PlayerState
             // 플래그 리셋
             groundLanded = false;
 
+            // 점프 계속 입력 시 다시 점프
             if (pc.isJumpInput)
                 pc.stateMachine.ChangeState(pc.stateMachine.stateDic[PlayerStateTypes.Jump]);
+            // 이동 계속 입력 시 Walk상태로 전환
             else if (Mathf.Abs(pc.InputDir.x) > 0.1f)
             {
                 pc.stateMachine.ChangeState(pc.stateMachine.stateDic[PlayerStateTypes.Walk]);
                 isJumping = false;
             }
+            // 입력 없을 시 Idle상태로 전환
             else
             {
                 pc.stateMachine.ChangeState(pc.stateMachine.stateDic[PlayerStateTypes.Idle]);
@@ -285,13 +288,12 @@ public class Player_Fall : PlayerState
             pc.finalVerticalVelocity = Vector2.zero;
 
             // 플레이어 콜라이더를 현재 Ground 오브젝트의 접점 위치에 맞추기 & 바닥 법선벡터 각도로 맞추기
-            colliderState.SetColliderToQuaternion(colliderState.groundHitColids[0].transform.rotation);
+            colliderState.SetColliderToQuaternion(colliderState.closestGroundCollider.transform.rotation);
             pc.transform.position = colliderState.groundHitPos;
             
             // 기존 이동 벡터 -> 바닥 각도에 맞는 이동 벡터로 변환
             pc.finalHorizontalVelocity = pc.finalHorizontalVelocity.magnitude * pc.playerCollider.transform.right * Mathf.Sign(pc.finalHorizontalVelocity.x);
 
-            // 점프 계속 입력 시 다시 점프, 입력없을 시 Idle상태로 전환
         }
     }
 }
@@ -420,7 +422,7 @@ public class Player_Attack : PlayerState
     }
     public override void Enter()
     {
-        pc.isAttackInput = true;
+        pc.finalHorizontalVelocity = Vector2.zero;
 
         index = 0;
         AttackPlayByIndex();
@@ -443,9 +445,9 @@ public class Player_Attack : PlayerState
     }
     public override void FixedUpdate()
     {
-        pc.SimulateFinalVelocity();
+
     }
-    public override void Exit() { pc.isAttackInput = false; }
+    public override void Exit() { }
 
     public void AttackPlayByIndex()
     {
@@ -463,6 +465,8 @@ public class Player_Attack : PlayerState
                 pc.animator.Play(pc.Attack03_HASH);
                 break;
         }
+
+        pc.transform.position += Mathf.Sign(pc.AttackDir.x) * pc.playerCollider.transform.right * 1f;
 
         coolTime = pc.attackCoolTime;
         chainTime = pc.attackChainTime;
