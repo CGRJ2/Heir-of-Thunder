@@ -271,9 +271,22 @@ public class PlayerController : CharacterControllerBase
 
     public Vector3 GetFinalVelocity()
     {
-        Vector2 newTotalVelocity = GetGroundSideVelocity() + GetGroundDrag();
-
-        finalHorizontalVelocity += newTotalVelocity * Time.fixedDeltaTime;
+        // 벽 판정, 현재 입력 방향으로 갈 수 있는지 없는지 체크
+        if (colliderState.closestLeftWallCollider != null && Mathf.Sign(InputDir.x) == -1)
+        {
+            // 왼쪽 벽에 닿았을 때, 진행방향이 왼쪽이라면 이동X
+            finalHorizontalVelocity = Vector2.zero;
+        }
+        else if (colliderState.closestRightWallCollider != null && Mathf.Sign(InputDir.x) == 1)
+        {
+            // 오른쪽 벽에 닿았을 때, 진행방향이 오른쪽이라면 이동X
+            finalHorizontalVelocity = Vector2.zero;
+        }
+        else
+        {
+            Vector2 newTotalVelocity = GetGroundSideVelocity() + GetGroundDrag();
+            finalHorizontalVelocity += newTotalVelocity * Time.fixedDeltaTime;
+        }
 
         return finalHorizontalVelocity + finalVerticalVelocity;
     }
@@ -282,6 +295,9 @@ public class PlayerController : CharacterControllerBase
     {
         Vector2 currentVelocity = finalHorizontalVelocity;
         Vector2 sideMoveForce;
+
+
+
         // 횡이동 입력값이 있을 때 => 횡이동 처리
         if (InputDir.x != 0)
         {
