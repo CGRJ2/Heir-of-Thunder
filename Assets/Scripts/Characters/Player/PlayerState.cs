@@ -47,6 +47,7 @@ public class PlayerState : BaseState
         // Fall 상태의 FixedUpdate에서 플레이어의 발을 지면에 스냅하는 로직이 있기 때문.
         if (Mathf.Sign(pc.InputDir.y) == -1 && colliderState.isGrounded && pc.stateMachine.CurState != pc.stateMachine.stateDic[PlayerStateTypes.Fall])
         {
+            colliderState.CrouchCollidToggle(true);
             if (pc.finalHorizontalVelocity.magnitude > pc.GetSlidingSpeedMin())
             {
                 pc.stateMachine.ChangeState(pc.stateMachine.stateDic[PlayerStateTypes.GroundSlide]);
@@ -59,6 +60,10 @@ public class PlayerState : BaseState
             {
                 pc.stateMachine.ChangeState(pc.stateMachine.stateDic[PlayerStateTypes.CrouchMove]);
             }
+        }
+        else
+        {
+            colliderState.CrouchCollidToggle(false);
         }
 
         //#낙하 조건

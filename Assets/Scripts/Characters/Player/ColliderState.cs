@@ -7,6 +7,11 @@ public class ColliderState : MonoBehaviour
 
     // 45µµ ±‚¡ÿ Wall vs Ground
     [SerializeField] Collider colliderSelf;
+    float initHeight;
+    float initCenterY;
+    public float crouchHeight;
+    public float crouchCenterY;
+
     [SerializeField] LayerMask layerMask;
     [SerializeField] float groundRayRadius;
     [SerializeField] float coyoteTime;
@@ -36,6 +41,22 @@ public class ColliderState : MonoBehaviour
     private void Start()
     {
         //Application.targetFrameRate = 60;
+        initCenterY = colliderSelf.GetComponent<CapsuleCollider>().center.y;
+        initHeight = colliderSelf.GetComponent<CapsuleCollider>().height;
+    }
+
+    public void CrouchCollidToggle(bool isCrouching)
+    {
+        if (isCrouching)
+        {
+            colliderSelf.GetComponent<CapsuleCollider>().center = new Vector3(0, crouchCenterY,0);
+            colliderSelf.GetComponent<CapsuleCollider>().height = crouchHeight;
+        }
+        else
+        {
+            colliderSelf.GetComponent<CapsuleCollider>().center = new Vector3(0, initCenterY, 0);
+            colliderSelf.GetComponent<CapsuleCollider>().height = initHeight;
+        }
     }
 
     public void Update()
