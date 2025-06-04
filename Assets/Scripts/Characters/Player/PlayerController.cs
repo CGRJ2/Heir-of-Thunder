@@ -272,12 +272,12 @@ public class PlayerController : CharacterControllerBase
     public Vector3 GetFinalVelocity()
     {
         // 벽 판정, 현재 입력 방향으로 갈 수 있는지 없는지 체크
-        if (colliderState.closestLeftWallCollider != null && Mathf.Sign(InputDir.x) == -1)
+        if (colliderState.closestLeftWallCollider != null && Mathf.Sign(InputDir.x) == Mathf.Sign(colliderState.enterDir.x))
         {
             // 왼쪽 벽에 닿았을 때, 진행방향이 왼쪽이라면 이동X
             finalHorizontalVelocity = Vector2.zero;
         }
-        else if (colliderState.closestRightWallCollider != null && Mathf.Sign(InputDir.x) == 1)
+        else if (colliderState.closestRightWallCollider != null && Mathf.Sign(InputDir.x) == Mathf.Sign(colliderState.enterDir.x))
         {
             // 오른쪽 벽에 닿았을 때, 진행방향이 오른쪽이라면 이동X
             finalHorizontalVelocity = Vector2.zero;

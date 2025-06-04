@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-
 public class ColliderState : MonoBehaviour
 {
     // 이건 상태 전환에 유연할 필요없으니까, 그냥 enum타입으로 그때그때 맞는 상태를 업데이트하도록 만들자
@@ -25,7 +24,12 @@ public class ColliderState : MonoBehaviour
     public RaycastHit[] leftWallHits;
     public Collider closestLeftWallCollider;
     public Collider closestRightWallCollider;
+    public Vector3 leftWallHitPos;
+    public Vector3 rightWallHitPos;
+    public Vector3 enterDir;
+
     public bool isEdge; // isGrounded일 때
+
 
     //법선벡터가 45도 이상/이하로 기준 나뉨
 
@@ -114,28 +118,37 @@ public class ColliderState : MonoBehaviour
             isGrounded = false;
             coyoteTimeCounter -= Time.fixedDeltaTime;
         }*/
+
+        /*// 최종 hit 확정 후, 정확하게 위치 맞추기
+        if (closestDistance != float.MaxValue && closestDistance > 0)
+        {
+            transform.position += dir * closestDistance;
+        }*/
     }
 
     public void WallCheck()
     {
-        Vector3 centerDown;
-        Vector3 centerTop;
         if (colliderSelf is CapsuleCollider capCol)
         {
-            centerDown = transform.position + colliderSelf.transform.up * wallMinHeight + colliderSelf.transform.up * capCol.radius;
-            centerTop = transform.position + colliderSelf.transform.up * capCol.height - colliderSelf.transform.up * capCol.radius;
+            Vector3 centerDown = transform.position + colliderSelf.transform.up * wallMinHeight + colliderSelf.transform.up * capCol.radius;
+            Vector3 centerTop = transform.position + colliderSelf.transform.up * capCol.height - colliderSelf.transform.up * capCol.radius;
 
-            closestRightWallCollider = GetWallCollider(centerDown, centerTop, capCol.radius, colliderSelf.transform.right);
-            closestLeftWallCollider = GetWallCollider(centerDown, centerTop, capCol.radius, -colliderSelf.transform.right);
+            Vector3 colliderRight = colliderSelf.transform.right;
+
+            closestRightWallCollider = GetWallCollider(centerDown, centerTop, capCol.radius, colliderRight, out rightWallHitPos);
+            closestLeftWallCollider = GetWallCollider(centerDown, centerTop, capCol.radius, -colliderRight, out leftWallHitPos);
         }
     }
 
-    public Collider GetWallCollider(Vector3 centerDown, Vector3 centerTop, float radius, Vector3 dir)
+    public Collider GetWallCollider(Vector3 centerDown, Vector3 centerTop, float radius, Vector3 dir, out Vector3 hitPos)
     {
         RaycastHit[] raycastHits = Physics.CapsuleCastAll(centerDown, centerTop, radius, dir, sideRayDistance, layerMask);
         Collider closestWallCollider = null;
+        Vector2 correctSidePos = centerDown + dir * sideRayDistance;
 
-        // 가장 낮은 접촉 지점 반환해서 그 콜라이더 넣기 (겹쳤을 때 대비) => 어차피 원점이 바닥에서 시작할텐데 괜찮지 않나?
+        hitPos = Vector3.zero;
+
+        // 가장 접촉 지점 -> 가장 낮은 접촉 지점
         if (raycastHits.Length > 0)
         {
             float lowestY = float.MaxValue;
@@ -169,10 +182,26 @@ public class ColliderState : MonoBehaviour
                 {
                     lowestY = hit.point.y;
                     closestWallCollider = hit.collider;
+                    hitPos = hit.point;
+                    
+                    
+                    if (closestDistance > 0)
+                    {
+                        enterDir = hit.point - transform.position;
+                    }
                 }
             }
+
+            // 최종 hit 확정 후, 정확하게 위치 맞추기
+            if (closestDistance != float.MaxValue && Mathf.Sign(enterDir.x) == Mathf.Sign(GetComponent<PlayerController>().InputDir.x))
+            {
+                transform.position += dir * closestDistance;
+            }
+
         }
-        return closestWallCollider;
+        
+
+            return closestWallCollider;
     }
 
     public void SetColliderToQuaternion(Quaternion quaternion)
@@ -188,7 +217,7 @@ public class ColliderState : MonoBehaviour
         if (colliderSelf is CapsuleCollider capCol)
         {
             // 캡슐 시작점과 끝점 계산
-            Vector3 centerDown = transform.position + colliderSelf.transform.up * 0.1f + colliderSelf.transform.up * capCol.radius;
+            Vector3 centerDown = transform.position + colliderSelf.transform.up * wallMinHeight + colliderSelf.transform.up * capCol.radius;
             Vector3 centerTop = transform.position + colliderSelf.transform.up * capCol.height - colliderSelf.transform.up * capCol.radius;
 
             // 오른쪽 방향 기즈모
